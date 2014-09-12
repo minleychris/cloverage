@@ -6,7 +6,7 @@
   (map name (mapcat blt/namespaces-in-dir dirs)))
 
 (defn get-lib-version []
-  (or (System/getenv "CLOVERAGE_VERSION") "RELEASE"))
+  (or (System/getenv "CLOVERAGE_VERSION") "1.0.5-SNAPSHOT"))
 
 (defn project-file-to-commandline-args [data]
   (reduce (fn [r [k v]]
