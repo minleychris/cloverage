@@ -91,6 +91,14 @@
        ["-d" "--[no-]debug"
         "Output debugging information to stdout." :default false]
        ["--[no-]nop" "Instrument with noops." :default false]
+       ["--minimum-total-forms-percent"
+        "Minimum overal percentage of forms covered. Will fail if less than this."
+        :parse-fn #(Double/parseDouble %)
+        :default 0.0]
+       ["--minimum-total-lines-percent"
+        "Minimum overal percentage of lines covered. Will fail if less than this."
+        :parse-fn #(Double/parseDouble %)
+        :default 0.0]
        ["-n" "--ns-regex"
         "Regex for instrumented namespaces (can be repeated)."
         :default  []
@@ -136,6 +144,8 @@
         ns-regexs     (map re-pattern (:ns-regexp opts))
         test-regexs   (map re-pattern (:test-ns-regexp opts))
         exclude-regex (map re-pattern (:ns-exclude-regex opts))
+        minimum-total-forms-percent (:minimum-total-forms-percent opts)
+        minimum-total-lines-percent (:minimum-total-lines-percent opts)
         start         (System/currentTimeMillis)
         test-nses     (concat add-test-nses (find-nses test-regexs))
         namespaces    (clojure.set/difference
@@ -165,10 +175,11 @@
               ;; sum up errors as in lein test
               errors      (when test-result
                             (reduce + ((juxt :error :fail) test-result)))
-              exit-code   (cond
-                            (not test-result) -1
-                            (> errors 128)    -2
-                            :else             errors)]
+              exit-code   (atom
+                            (cond
+                              (not test-result) -1
+                              (> errors 128)    -2
+                              :else             errors))]
           (println "Ran tests.")
           (when output
             (.mkdir (File. output))
@@ -182,8 +193,14 @@
                            (when summary? (summary stats))]]
 
               (println "Produced output in" (.getAbsolutePath (File. output)) ".")
-              (doseq [r results] (when r (println r)))))
+              (doseq [r results] (when r (println r)))
+              (when (and (not= minimum-total-forms-percent 0.0)
+                         (> minimum-total-forms-percent (:percent-forms-covered (total-stats stats))))
+                (reset! exit-code -3))
+              (when (and (not= minimum-total-lines-percent 0.0)
+                         (> minimum-total-lines-percent (:percent-lines-covered (total-stats stats))))
+                (reset! exit-code -4))))
           (if *exit-after-test*
             (do (shutdown-agents)
-                (System/exit exit-code))
-            exit-code))))))
+                (System/exit @exit-code))
+            @exit-code))))))
